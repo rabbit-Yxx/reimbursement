@@ -1,0 +1,6 @@
+node_modules/
+dist/
+dist-electron/
+.env
+.DS_Store
+上海出差 20260303-20260305/
