@@ -1,5 +1,4 @@
 import { Routes, Route } from 'react-router-dom'
-import TitleBar from './components/TitleBar.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import ToastContainer from './components/ToastContainer.jsx'
 import HomePage from './pages/HomePage.jsx'
@@ -13,7 +12,6 @@ export default function App() {
   return (
     <AppProvider>
       <div className="app-layout">
-        <TitleBar />
         <div className="app-body">
           <Sidebar />
           <main className="main-content">

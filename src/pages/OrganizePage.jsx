@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext.jsx'
+import { analyzeFiles } from '../utils/analyzer.js'
+import { packageFiles } from '../utils/packager.js'
 
 const EXPENSE_TYPE_OPTIONS = [
   { value: 'train',         label: '高铁票' },
@@ -90,10 +92,10 @@ export default function OrganizePage() {
 
   const handleFiles = async (files, groupType) => {
     if (!files || files.length === 0) return
-    const paths = Array.from(files).map(f => window.electronAPI?.getFilePath(f) || f.path)
+    const fileArray = Array.from(files)
     setStep(1)
     try {
-      const results = await window.electronAPI?.filesAnalyze(paths, groupType)
+      const results = await analyzeFiles(fileArray, groupType)
       if (results) {
         setItems(prev => {
           const newItems = [...prev, ...results]
@@ -139,16 +141,11 @@ export default function OrganizePage() {
         ...item,
         newFilename: buildFilename(item)
       }))
-      const result = await window.electronAPI?.filesPackage(itemsWithFilenames)
+      const result = await packageFiles(itemsWithFilenames)
       if (result?.success) {
         setOrganizeItems(items)
         setStep(3)
-        addToast('打包成功！文件已保存', 'success')
-        if (result.savedPath) {
-          window.electronAPI?.shellOpenPath(result.savedPath.replace(/[^\\\/]+$/, ''))
-        }
-      } else if (result?.canceled) {
-        addToast('已取消保存', 'info')
+        addToast('打包成功！文件已开始下载', 'success')
       } else {
         addToast('打包失败：' + (result?.error || '未知错误'), 'error')
       }

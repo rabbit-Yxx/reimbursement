@@ -21,15 +21,23 @@ export function AppProvider({ children }) {
 
   // Load config on mount
   useEffect(() => {
-    const api = window.electronAPI
-    if (api) {
-      api.configGet().then(c => { if (c) setConfigState(c) })
+    try {
+      const saved = localStorage.getItem('appConfig')
+      if (saved) {
+        setConfigState(JSON.parse(saved))
+      }
+    } catch (e) {
+      console.error('Failed to load config from localStorage', e)
     }
   }, [])
 
   const saveConfig = useCallback(async (newConfig) => {
     setConfigState(newConfig)
-    await window.electronAPI?.configSet(newConfig)
+    try {
+      localStorage.setItem('appConfig', JSON.stringify(newConfig))
+    } catch (e) {
+      console.error('Failed to save config to localStorage', e)
+    }
   }, [])
 
   // Toast system
