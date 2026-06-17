@@ -547,6 +547,31 @@ export default function TripFlow() {
                           📁 选图补充
                         </label>
                       </div>
+                      <div
+                        className="chat-paste-area w-full mt-2"
+                        contentEditable
+                        onPaste={(e) => {
+                          e.preventDefault()
+                          const clipboardItems = e.clipboardData.items
+                          const files = []
+                          for (let i = 0; i < clipboardItems.length; i++) {
+                            const item = clipboardItems[i]
+                            if (item.type.startsWith('image/')) {
+                              const blob = item.getAsFile()
+                              if (blob) files.push(new File([blob], `粘贴截图_${Date.now()}_${i}.png`, { type: blob.type }))
+                            }
+                          }
+                          if (files.length > 0) {
+                            handleStashFiles(files, gid === 'null' ? null : gid)
+                          } else {
+                            addToast('剪贴板里没有图片哦', 'warning')
+                          }
+                          e.target.textContent = ''
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                        data-placeholder={`在此粘贴截图存入【${g.name}】...`}
+                        style={{ minHeight: '36px', fontSize: '13px' }}
+                      />
                     </div>
                   )
                 })}
