@@ -11,9 +11,10 @@ localforage.config({
 /**
  * Save a file to the stash.
  * @param {File} file 
+ * @param {string|null} groupId Group ID for categorized stashing (e.g. meals). Null for general bucket.
  * @returns {Promise<Object>} The stashed item metadata
  */
-export async function stashFile(file) {
+export async function stashFile(file, groupId = null) {
   const id = 'stash_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
   
   // Read file as ArrayBuffer to ensure safe storage across browsers
@@ -25,11 +26,31 @@ export async function stashFile(file) {
     type: file.type,
     size: file.size,
     timestamp: Date.now(),
+    groupId, // null means "散件区" (Misc)
     data: arrayBuffer
   };
   
   await localforage.setItem(id, stashItem);
-  return { id, name: file.name, size: file.size, timestamp: stashItem.timestamp };
+  return { id, name: file.name, size: file.size, timestamp: stashItem.timestamp, groupId };
+}
+
+/**
+ * Create an empty group.
+ * @param {string} groupName 
+ * @returns {Promise<Object>}
+ */
+export async function createStashGroup(groupName) {
+  const groupId = Date.now().toString();
+  const stashItem = {
+    id: 'groupdef_' + groupId,
+    name: groupName,
+    type: 'group_definition',
+    timestamp: Date.now(),
+    groupId: groupId, // The ID of the group
+    data: null // No file data
+  };
+  await localforage.setItem(stashItem.id, stashItem);
+  return stashItem;
 }
 
 /**
@@ -42,11 +63,13 @@ export async function getStashMetadata() {
     metadataList.push({
       id: key,
       name: value.name,
+      type: value.type,
       size: value.size,
-      timestamp: value.timestamp
+      timestamp: value.timestamp,
+      groupId: value.groupId || null
     });
   });
-  return metadataList.sort((a, b) => b.timestamp - a.timestamp);
+  return metadataList.sort((a, b) => a.timestamp - b.timestamp); // Sort chronological
 }
 
 /**
@@ -71,9 +94,29 @@ export async function exportStashAsZip() {
   const zip = new JSZip();
   let count = 0;
   
+  // First, gather all group definitions
+  const groupNames = {};
   await localforage.iterate((value) => {
-    // value.data is an ArrayBuffer
-    zip.file(value.name, value.data);
+    if (value.type === 'group_definition') {
+      groupNames[value.groupId] = value.name;
+    }
+  });
+  
+  await localforage.iterate((value) => {
+    if (value.type === 'group_definition') return; // Skip the metadata entries
+    if (!value.data) return; // Paranoia check
+    
+    // If it has a groupId, put it in a folder "Group_<groupId>/"
+    // Otherwise put it in "Misc/"
+    let folderName = '散件区/';
+    if (value.groupId) {
+      const gName = groupNames[value.groupId] || value.groupId;
+      // Sanitize folder name
+      const safeName = gName.replace(/[\/\\]/g, '_');
+      folderName = `餐饮组_${safeName}/`;
+    }
+    
+    zip.file(folderName + value.name, value.data);
     count++;
   });
   
