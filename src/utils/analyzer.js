@@ -376,7 +376,7 @@ export async function analyzeFiles(filesArray, groupType) {
     }
   }
 
-  if (groupType === 'meal') {
+  if (groupType === 'meal' || groupType === 'group' || groupType === 'accommodation') {
     return autoGroup(results);
   }
 

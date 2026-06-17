@@ -117,7 +117,7 @@ export default function TripFlow() {
       let allResults = []
       for (const folder of folders) {
         const files = pendingFiles[folder]
-        const groupType = folder.startsWith('餐饮组') ? 'meal' : 'other'
+        const groupType = folder.startsWith('专项组') ? 'group' : 'other'
         
         try {
           const results = await analyzeFiles(files, groupType)
@@ -242,7 +242,7 @@ export default function TripFlow() {
   }
 
   const handleCreateStashGroup = async () => {
-    const name = window.prompt('请输入新建的餐饮分组名称（如：6月14日晚餐）')
+    const name = window.prompt('请输入新建专项组名称（如：6月14日晚餐、万豪酒店住宿）')
     if (name && name.trim()) {
       await createStashGroup(name.trim())
       addToast('分组创建成功', 'success')
@@ -507,7 +507,7 @@ export default function TripFlow() {
         return (
           <Wrapper title="随手拍暂存">
             <div className="flex gap-3 mb-2">
-              <button className="btn btn-secondary flex-1" onClick={handleCreateStashGroup}>➕ 新建餐饮专项组</button>
+              <button className="btn btn-secondary flex-1" onClick={handleCreateStashGroup}>➕ 新建专项组 (餐饮/住宿等)</button>
             </div>
 
             {hasAnyItems ? (

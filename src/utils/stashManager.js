@@ -113,7 +113,7 @@ export async function exportStashAsZip() {
       const gName = groupNames[value.groupId] || value.groupId;
       // Sanitize folder name
       const safeName = gName.replace(/[\/\\]/g, '_');
-      folderName = `餐饮组_${safeName}/`;
+      folderName = `专项组_${safeName}/`;
     }
     
     zip.file(folderName + value.name, value.data);
