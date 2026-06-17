@@ -188,28 +188,9 @@ export default function TripFlow() {
 
       {step === 2 && (
         <Wrapper title={`正在出差：${tripStandards?.name || city}`}>
-          <div className="card flex flex-col gap-4">
-            <div className={`grid-2 ${analyzing ? 'opacity-50 pointer-events-none' : ''}`}>
-              <label className="upload-zone" style={{ padding: '20px 12px' }}>
-                <input type="file" accept="image/*" capture="environment" onChange={e => handleFiles(e.target.files)} />
-                <div className="upload-icon" style={{ fontSize: '28px', marginBottom: '8px' }}>📷</div>
-                <div className="upload-title" style={{ fontSize: '14px', marginBottom: '4px' }}>拍照</div>
-                <div className="upload-hint" style={{ fontSize: '11px' }}>当场拍发票</div>
-              </label>
-              <label className="upload-zone" style={{ padding: '20px 12px' }}>
-                <input type="file" multiple accept="image/*,.pdf" onChange={e => handleFiles(e.target.files)} />
-                <div className="upload-icon" style={{ fontSize: '28px', marginBottom: '8px' }}>📁</div>
-                <div className="upload-title" style={{ fontSize: '14px', marginBottom: '4px' }}>选文件</div>
-                <div className="upload-hint" style={{ fontSize: '11px' }}>图片或PDF</div>
-              </label>
-            </div>
-            <p className="text-sm text-muted" style={{ fontSize: '11px', opacity: 0.7, textAlign: 'center', margin: '-4px 0' }}>💡 选文件后，点"文件"→左上角☰→"图片"即可浏览相册</p>
-            {analyzing && <div className="text-center text-sm text-accent">努力解析中，请稍候...</div>}
-          </div>
-          
+          {/* Chat-style uploaded items list */}
           {items.length > 0 && (
-            <div className="flex flex-col gap-3 mt-4">
-              <h3 className="text-lg">已上传 ({items.length})</h3>
+            <div className="flex flex-col gap-3">
               {items.map((item, idx) => (
                 <div key={idx} className="card flex justify-between items-center" style={{ padding: '12px 16px' }}>
                   <div className="flex flex-col gap-1">
@@ -221,12 +202,71 @@ export default function TripFlow() {
                   </div>
                 </div>
               ))}
-              
-              <button className="btn btn-primary mt-6 w-full" onClick={handleEndTrip}>
-                结束出差并结算
-              </button>
             </div>
           )}
+
+          {items.length === 0 && (
+            <div className="empty-state" style={{ padding: '40px 20px' }}>
+              <div className="empty-state-icon">📋</div>
+              <h3>还没有发票</h3>
+              <p>在下方粘贴截图，或点击📷/📁按钮上传</p>
+            </div>
+          )}
+
+          {analyzing && (
+            <div className="card flex items-center gap-3" style={{ padding: '12px 16px', borderColor: 'rgba(99,102,241,0.3)' }}>
+              <div className="spinner"></div>
+              <span className="text-sm text-accent">正在识别发票...</span>
+            </div>
+          )}
+
+          {items.length > 0 && (
+            <button className="btn btn-primary w-full" onClick={handleEndTrip}>
+              结束出差并结算
+            </button>
+          )}
+
+          {/* Chat-style input bar at bottom */}
+          <div className="chat-input-bar">
+            <label className="chat-action-btn">
+              <input type="file" accept="image/*" capture="environment" onChange={e => { handleFiles(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+              📷
+            </label>
+            <label className="chat-action-btn">
+              <input type="file" multiple accept="image/*,.pdf" onChange={e => { handleFiles(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+              📁
+            </label>
+            <div
+              className="chat-paste-area"
+              contentEditable
+              onPaste={(e) => {
+                e.preventDefault()
+                const clipboardItems = e.clipboardData.items
+                const files = []
+                for (let i = 0; i < clipboardItems.length; i++) {
+                  const item = clipboardItems[i]
+                  if (item.type.startsWith('image/')) {
+                    const blob = item.getAsFile()
+                    if (blob) {
+                      const file = new File([blob], `粘贴图片_${Date.now()}_${i}.png`, { type: blob.type })
+                      files.push(file)
+                    }
+                  }
+                }
+                if (files.length > 0) {
+                  handleFiles(files)
+                  e.target.textContent = ''
+                } else {
+                  addToast('剪贴板里没有图片哦', 'warning')
+                }
+                e.target.textContent = ''
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.preventDefault()
+              }}
+              data-placeholder="在这里粘贴发票截图..."
+            />
+          </div>
         </Wrapper>
       )}
 
