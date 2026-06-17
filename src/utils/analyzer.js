@@ -4,11 +4,10 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-// Ensure Tesseract uses local tessdata
+// Ensure Tesseract uses local tessdata — use import.meta.url for correct base path
+const basePath = import.meta.url ? new URL('.', import.meta.url).href : '';
 const TESS_OPTIONS = {
-  workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
-  corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5',
-  langPath: '/tessdata',
+  langPath: './tessdata',
   gzip: false
 };
 
@@ -233,10 +232,17 @@ async function extractPdfText(file) {
 
 async function extractImageText(fileOrBlob) {
   try {
-    const worker = await createWorker('chi_sim', 1, TESS_OPTIONS);
-    const { data: { text } } = await worker.recognize(fileOrBlob);
-    await worker.terminate();
-    return text;
+    // Timeout after 30 seconds to prevent infinite hang
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('OCR 超时')), 30000)
+    );
+    const ocrPromise = (async () => {
+      const worker = await createWorker('chi_sim', 1, TESS_OPTIONS);
+      const { data: { text } } = await worker.recognize(fileOrBlob);
+      await worker.terminate();
+      return text;
+    })();
+    return await Promise.race([ocrPromise, timeoutPromise]);
   } catch (error) {
     console.error('Error extracting Image OCR:', error);
     return '';

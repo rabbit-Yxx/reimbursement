@@ -70,12 +70,29 @@ export default function TripFlow() {
     setAnalyzing(true)
     try {
       const results = await analyzeFiles(fileArray, 'other')
-      if (results) {
+      if (results && results.length > 0) {
         setItems(prev => [...prev, ...results])
-        addToast(`成功解析 ${results.length} 份文件`, 'success')
+        const recognized = results.filter(r => r.amount || r.expenseType)
+        if (recognized.length > 0) {
+          addToast(`成功识别 ${recognized.length} 份发票`, 'success')
+        } else {
+          addToast(`已添加 ${results.length} 份文件（未能自动识别内容）`, 'info')
+        }
       }
     } catch (e) {
-      addToast('解析出错：' + e.message, 'error')
+      // Even on error, add files with minimal info so user doesn't lose them
+      const fallbackItems = fileArray.map(f => ({
+        file: f,
+        originalName: f.name,
+        text: '',
+        expenseType: null,
+        date: null,
+        amount: null,
+        role: null,
+        status: 'incomplete',
+      }))
+      setItems(prev => [...prev, ...fallbackItems])
+      addToast('识别出错，文件已保留：' + e.message, 'warning')
     }
     setAnalyzing(false)
   }
