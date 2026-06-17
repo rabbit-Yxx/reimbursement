@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useApp } from '../context/AppContext.jsx'
-import { analyzeFiles } from '../utils/analyzer.js'
+import { analyzeFiles, setAnalyzerProgressCallback } from '../utils/analyzer.js'
 import { packageFiles } from '../utils/packager.js'
 import { optimizeInvoices } from '../utils/optimizer.js'
 
@@ -23,6 +23,7 @@ export default function TripFlow() {
   // Trip Data
   const [items, setItems] = useState([])
   const [analyzing, setAnalyzing] = useState(false)
+  const [analyzeMsg, setAnalyzeMsg] = useState('正在识别发票...')
   const [optimizations, setOptimizations] = useState(null)
   const [packaging, setPackaging] = useState(false)
 
@@ -68,6 +69,8 @@ export default function TripFlow() {
     if (!files || files.length === 0) return
     const fileArray = Array.from(files)
     setAnalyzing(true)
+    setAnalyzeMsg('正在识别发票...')
+    setAnalyzerProgressCallback((msg) => setAnalyzeMsg(msg))
     try {
       const results = await analyzeFiles(fileArray, 'other')
       if (results && results.length > 0) {
@@ -95,6 +98,7 @@ export default function TripFlow() {
       addToast('识别出错，文件已保留：' + e.message, 'warning')
     }
     setAnalyzing(false)
+    setAnalyzerProgressCallback(null)
   }
 
   // Step 3: Run Optimizer
@@ -233,7 +237,7 @@ export default function TripFlow() {
           {analyzing && (
             <div className="card flex items-center gap-3" style={{ padding: '12px 16px', borderColor: 'rgba(99,102,241,0.3)' }}>
               <div className="spinner"></div>
-              <span className="text-sm text-accent">正在识别发票...</span>
+              <span className="text-sm text-accent">{analyzeMsg}</span>
             </div>
           )}
 

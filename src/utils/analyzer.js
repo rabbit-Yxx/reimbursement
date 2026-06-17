@@ -12,6 +12,11 @@ const TESS_OPTIONS = {
   gzip: false
 };
 
+let globalProgressCallback = null;
+export function setAnalyzerProgressCallback(cb) {
+  globalProgressCallback = cb;
+}
+
 // ==========================================
 // Parsing Logic (Copied from main.js)
 // ==========================================
@@ -233,12 +238,25 @@ async function extractPdfText(file) {
 
 async function extractImageText(fileOrBlob) {
   try {
-    // Timeout after 30 seconds to prevent infinite hang
+    // Timeout after 120 seconds to prevent infinite hang (allows time for 2.5MB model download on slow mobile networks)
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('OCR 超时')), 30000)
+      setTimeout(() => reject(new Error('OCR 超时 (120s)')), 120000)
     );
     const ocrPromise = (async () => {
-      const worker = await createWorker('chi_sim', 1, TESS_OPTIONS);
+      const worker = await createWorker('chi_sim', 1, {
+        ...TESS_OPTIONS,
+        logger: m => {
+          if (globalProgressCallback) {
+            if (m.status === 'loading language traineddata') {
+               globalProgressCallback(`首次需下载字库 (${Math.round(m.progress * 100)}%)`);
+            } else if (m.status === 'recognizing text') {
+               globalProgressCallback(`识别文字中 (${Math.round(m.progress * 100)}%)`);
+            } else {
+               globalProgressCallback(`初始化识别引擎...`);
+            }
+          }
+        }
+      });
       const { data: { text } } = await worker.recognize(fileOrBlob);
       await worker.terminate();
       return text;
