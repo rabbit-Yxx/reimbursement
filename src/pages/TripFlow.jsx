@@ -543,118 +543,88 @@ export default function TripFlow() {
               <button className="btn btn-secondary flex-1" onClick={handleCreateStashGroup}>➕ 新建专项组 (餐饮/住宿等)</button>
             </div>
 
-            {hasAnyItems ? (
-              <div className="flex flex-col gap-5">
-                {Object.keys(groups).map(gid => {
-                  const g = groups[gid]
-                  // Don't show empty general bucket if there are other groups, wait, better show it if it has items or is general.
-                  if (gid === 'null' && g.items.length === 0) return null
 
-                  return (
-                    <div key={gid} className="card flex flex-col gap-3" style={{ padding: '16px', background: gid === 'null' ? 'transparent' : 'rgba(99,102,241,0.05)' }}>
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-md font-bold text-accent">{g.name}</h3>
-                          {gid !== 'null' && (
-                            <button className="text-muted" style={{ background: 'transparent', padding: '0 4px' }} onClick={() => handleDeleteStashGroup(gid, g.name)}>
-                              🗑️
-                            </button>
-                          )}
-                        </div>
-                        {gid !== 'null' && <span className="text-xs text-muted">{g.items.length} 份文件</span>}
+            <div className="flex flex-col gap-5">
+              {Object.keys(groups).map(gid => {
+                const g = groups[gid]
+                // Always render all groups. The 'null' group is the general bucket.
+                
+                return (
+                  <div key={gid} className="card flex flex-col gap-3" style={{ padding: '16px', background: gid === 'null' ? 'transparent' : 'rgba(99,102,241,0.05)' }}>
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-md font-bold text-accent">{g.name}</h3>
+                        {gid !== 'null' && (
+                          <button className="text-muted" style={{ background: 'transparent', padding: '0 4px' }} onClick={() => handleDeleteStashGroup(gid, g.name)}>
+                            🗑️
+                          </button>
+                        )}
                       </div>
-
-                      {g.items.map((item) => (
-                        <div key={item.id} className="flex justify-between items-center bg-background rounded p-2 border border-border">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-sm text-ellipsis overflow-hidden whitespace-nowrap" style={{ maxWidth: '180px' }}>{item.name}</span>
-                          </div>
-                          <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={async () => {
-                            await removeStashItem(item.id)
-                            loadStash()
-                          }}>删除</button>
-                        </div>
-                      ))}
-
-                      {/* Group specific upload buttons */}
-                      <div className="flex gap-2 mt-2">
-                        <label className="btn btn-secondary flex-1 text-center cursor-pointer" style={{ padding: '8px' }}>
-                          <input type="file" accept="image/*" capture="environment" onChange={e => { handleStashFiles(e.target.files, gid === 'null' ? null : gid); e.target.value = '' }} style={{ display: 'none' }} />
-                          📷 补充拍照
-                        </label>
-                        <label className="btn btn-secondary flex-1 text-center cursor-pointer" style={{ padding: '8px' }}>
-                          <input type="file" multiple accept="image/*,.pdf" onChange={e => { handleStashFiles(e.target.files, gid === 'null' ? null : gid); e.target.value = '' }} style={{ display: 'none' }} />
-                          📁 选图补充
-                        </label>
-                      </div>
-                      <div
-                        className="chat-paste-area w-full mt-2"
-                        contentEditable
-                        onPaste={(e) => {
-                          e.preventDefault()
-                          const clipboardItems = e.clipboardData.items
-                          const files = []
-                          for (let i = 0; i < clipboardItems.length; i++) {
-                            const item = clipboardItems[i]
-                            if (item.type.startsWith('image/')) {
-                              const blob = item.getAsFile()
-                              if (blob) files.push(new File([blob], `粘贴截图_${Date.now()}_${i}.png`, { type: blob.type }))
-                            }
-                          }
-                          if (files.length > 0) {
-                            handleStashFiles(files, gid === 'null' ? null : gid)
-                          } else {
-                            addToast('剪贴板里没有图片哦', 'warning')
-                          }
-                          e.target.textContent = ''
-                        }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                        data-placeholder={`在此粘贴截图存入【${g.name}】...`}
-                        style={{ minHeight: '36px', fontSize: '13px' }}
-                      />
+                      {gid !== 'null' && <span className="text-xs text-muted">{g.items.length} 份文件</span>}
                     </div>
-                  )
-                })}
 
+                    {g.items.map((item) => (
+                      <div key={item.id} className="flex justify-between items-center bg-background rounded p-2 border border-border">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm text-ellipsis overflow-hidden whitespace-nowrap" style={{ maxWidth: '180px' }}>{item.name}</span>
+                        </div>
+                        <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={async () => {
+                          await removeStashItem(item.id)
+                          loadStash()
+                        }}>删除</button>
+                      </div>
+                    ))}
+                    
+                    {g.items.length === 0 && gid !== 'null' && (
+                       <span className="text-sm text-muted text-center py-2">空分组，请补充文件</span>
+                    )}
+
+                    {/* Group specific upload buttons */}
+                    <div className="flex gap-2 mt-2">
+                      <label className="btn btn-secondary flex-1 text-center cursor-pointer" style={{ padding: '8px' }}>
+                        <input type="file" accept="image/*" capture="environment" onChange={e => { handleStashFiles(e.target.files, gid === 'null' ? null : gid); e.target.value = '' }} style={{ display: 'none' }} />
+                        📷 补充拍照
+                      </label>
+                      <label className="btn btn-secondary flex-1 text-center cursor-pointer" style={{ padding: '8px' }}>
+                        <input type="file" multiple accept="image/*,.pdf" onChange={e => { handleStashFiles(e.target.files, gid === 'null' ? null : gid); e.target.value = '' }} style={{ display: 'none' }} />
+                        📁 选图补充
+                      </label>
+                    </div>
+                    <div
+                      className="chat-paste-area w-full mt-2"
+                      contentEditable
+                      onPaste={(e) => {
+                        e.preventDefault()
+                        const clipboardItems = e.clipboardData.items
+                        const files = []
+                        for (let i = 0; i < clipboardItems.length; i++) {
+                          const item = clipboardItems[i]
+                          if (item.type.startsWith('image/')) {
+                            const blob = item.getAsFile()
+                            if (blob) files.push(new File([blob], `粘贴截图_${Date.now()}_${i}.png`, { type: blob.type }))
+                          }
+                        }
+                        if (files.length > 0) {
+                          handleStashFiles(files, gid === 'null' ? null : gid)
+                        } else {
+                          addToast('剪贴板里没有图片哦', 'warning')
+                        }
+                        e.target.textContent = ''
+                      }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                      data-placeholder={gid === 'null' ? "在此粘贴截图存入【散件区】..." : `在此粘贴截图存入【${g.name}】...`}
+                      style={{ minHeight: '36px', fontSize: '13px' }}
+                    />
+                  </div>
+                )
+              })}
+
+              {hasAnyItems && (
                 <div className="flex gap-3 mt-4">
                   <button className="btn btn-secondary flex-1" onClick={handleClearStash}>清空暂存区</button>
                   <button className="btn btn-primary flex-1" onClick={handleExportStash}>打包导出 ZIP</button>
                 </div>
-              </div>
-            ) : (
-              <div className="empty-state" style={{ padding: '40px 20px' }}>
-                <div className="empty-state-icon">📱</div>
-                <h3>暂存区为空</h3>
-                <p>点击上方新建专项组，或直接下方拍照放入散件区</p>
-              </div>
-            )}
-
-            {/* General Paste Area */}
-            <div className="chat-input-bar mt-4">
-              <div
-                className="chat-paste-area w-full"
-                contentEditable
-                onPaste={(e) => {
-                  e.preventDefault()
-                  const clipboardItems = e.clipboardData.items
-                  const files = []
-                  for (let i = 0; i < clipboardItems.length; i++) {
-                    const item = clipboardItems[i]
-                    if (item.type.startsWith('image/')) {
-                      const blob = item.getAsFile()
-                      if (blob) files.push(new File([blob], `粘贴截图_${Date.now()}_${i}.png`, { type: blob.type }))
-                    }
-                  }
-                  if (files.length > 0) {
-                    handleStashFiles(files, null)
-                  } else {
-                    addToast('剪贴板里没有图片哦', 'warning')
-                  }
-                  e.target.textContent = ''
-                }}
-                onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                data-placeholder="在此粘贴截图直接存入【散件区】..."
-              />
+              )}
             </div>
             
             <button className="btn btn-secondary w-full mt-4" onClick={() => setStep(-1)}>返回首页</button>
