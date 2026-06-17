@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext.jsx'
 import { analyzeFiles, setAnalyzerProgressCallback } from '../utils/analyzer.js'
 import { packageFiles } from '../utils/packager.js'
 import { optimizeInvoices } from '../utils/optimizer.js'
-import { stashFile, getStashMetadata, clearStash, exportStashAsZip, removeStashItem, createStashGroup } from '../utils/stashManager.js'
+import { stashFile, getStashMetadata, clearStash, exportStashAsZip, removeStashItem, createStashGroup, removeStashGroup } from '../utils/stashManager.js'
 import JSZip from 'jszip'
 
 const Wrapper = ({ children, title }) => (
@@ -271,6 +271,14 @@ export default function TripFlow() {
     if (name && name.trim()) {
       await createStashGroup(name.trim())
       addToast('分组创建成功', 'success')
+      loadStash()
+    }
+  }
+
+  const handleDeleteStashGroup = async (groupId, groupName) => {
+    if (window.confirm(`确定要删除整组【${groupName}】吗？包含的文件也会被一并删除。`)) {
+      await removeStashGroup(groupId)
+      addToast('分组已删除', 'success')
       loadStash()
     }
   }
@@ -545,7 +553,14 @@ export default function TripFlow() {
                   return (
                     <div key={gid} className="card flex flex-col gap-3" style={{ padding: '16px', background: gid === 'null' ? 'transparent' : 'rgba(99,102,241,0.05)' }}>
                       <div className="flex justify-between items-center">
-                        <h3 className="text-md font-bold text-accent">{g.name}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-md font-bold text-accent">{g.name}</h3>
+                          {gid !== 'null' && (
+                            <button className="text-muted" style={{ background: 'transparent', padding: '0 4px' }} onClick={() => handleDeleteStashGroup(gid, g.name)}>
+                              🗑️
+                            </button>
+                          )}
+                        </div>
                         {gid !== 'null' && <span className="text-xs text-muted">{g.items.length} 份文件</span>}
                       </div>
 

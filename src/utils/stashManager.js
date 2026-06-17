@@ -81,6 +81,22 @@ export async function removeStashItem(id) {
 }
 
 /**
+ * Remove an entire group and all its items.
+ * @param {string} groupId 
+ */
+export async function removeStashGroup(groupId) {
+  const keysToRemove = [];
+  await localforage.iterate((value, key) => {
+    if (value.groupId === groupId || (value.type === 'group_definition' && value.groupId === groupId)) {
+      keysToRemove.push(key);
+    }
+  });
+  for (const key of keysToRemove) {
+    await localforage.removeItem(key);
+  }
+}
+
+/**
  * Clear the entire stash.
  */
 export async function clearStash() {
