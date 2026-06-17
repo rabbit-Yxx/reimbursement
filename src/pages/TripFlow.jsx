@@ -189,38 +189,21 @@ export default function TripFlow() {
       {step === 2 && (
         <Wrapper title={`正在出差：${tripStandards?.name || city}`}>
           <div className="card flex flex-col gap-4">
-            <div className={`grid-3 ${analyzing ? 'opacity-50 pointer-events-none' : ''}`}>
-              <label className="upload-zone" style={{ padding: '20px 8px' }}>
+            <div className={`grid-2 ${analyzing ? 'opacity-50 pointer-events-none' : ''}`}>
+              <label className="upload-zone" style={{ padding: '20px 12px' }}>
                 <input type="file" accept="image/*" capture="environment" onChange={e => handleFiles(e.target.files)} />
                 <div className="upload-icon" style={{ fontSize: '28px', marginBottom: '8px' }}>📷</div>
-                <div className="upload-title" style={{ fontSize: '13px', marginBottom: '4px' }}>拍照</div>
-                <div className="upload-hint" style={{ fontSize: '11px' }}>直接拍摄</div>
+                <div className="upload-title" style={{ fontSize: '14px', marginBottom: '4px' }}>拍照</div>
+                <div className="upload-hint" style={{ fontSize: '11px' }}>当场拍发票</div>
               </label>
-              <div className="upload-zone" style={{ padding: '20px 8px' }} onClick={() => {
-                const inp = document.createElement('input')
-                inp.type = 'file'
-                inp.multiple = true
-                inp.accept = 'image/png,image/jpeg,image/jpg,image/gif,image/webp'
-                inp.onchange = (e) => handleFiles(e.target.files)
-                inp.click()
-              }}>
-                <div className="upload-icon" style={{ fontSize: '28px', marginBottom: '8px' }}>🖼️</div>
-                <div className="upload-title" style={{ fontSize: '13px', marginBottom: '4px' }}>相册</div>
-                <div className="upload-hint" style={{ fontSize: '11px' }}>选发票图</div>
-              </div>
-              <div className="upload-zone" style={{ padding: '20px 8px' }} onClick={() => {
-                const inp = document.createElement('input')
-                inp.type = 'file'
-                inp.multiple = true
-                inp.accept = 'application/pdf'
-                inp.onchange = (e) => handleFiles(e.target.files)
-                inp.click()
-              }}>
-                <div className="upload-icon" style={{ fontSize: '28px', marginBottom: '8px' }}>📄</div>
-                <div className="upload-title" style={{ fontSize: '13px', marginBottom: '4px' }}>文件</div>
-                <div className="upload-hint" style={{ fontSize: '11px' }}>选PDF</div>
-              </div>
+              <label className="upload-zone" style={{ padding: '20px 12px' }}>
+                <input type="file" multiple accept="image/*,.pdf" onChange={e => handleFiles(e.target.files)} />
+                <div className="upload-icon" style={{ fontSize: '28px', marginBottom: '8px' }}>📁</div>
+                <div className="upload-title" style={{ fontSize: '14px', marginBottom: '4px' }}>选文件</div>
+                <div className="upload-hint" style={{ fontSize: '11px' }}>图片或PDF</div>
+              </label>
             </div>
+            <p className="text-sm text-muted" style={{ fontSize: '11px', opacity: 0.7, textAlign: 'center', margin: '-4px 0' }}>💡 选文件后，点"文件"→左上角☰→"图片"即可浏览相册</p>
             {analyzing && <div className="text-center text-sm text-accent">努力解析中，请稍候...</div>}
           </div>
           
