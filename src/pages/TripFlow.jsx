@@ -553,7 +553,7 @@ export default function TripFlow() {
 
       {step === 4 && (() => {
         // Compute groups
-        const groups = { null: { name: '散件区 (打车、住宿等)', items: [] } }
+        const groups = { null: { name: '散件区 (打车、高铁票等)', items: [] } }
         stashedItems.forEach(item => {
           if (item.type === 'group_definition') {
             if (!groups[item.groupId]) groups[item.groupId] = { name: item.name, items: [] }
