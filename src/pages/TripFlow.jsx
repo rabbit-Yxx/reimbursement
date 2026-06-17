@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext.jsx'
 import { analyzeFiles, setAnalyzerProgressCallback } from '../utils/analyzer.js'
 import { packageFiles } from '../utils/packager.js'
 import { optimizeInvoices } from '../utils/optimizer.js'
-import { stashFile, getStashMetadata, clearStash, exportStashAsZip, removeStashItem, createStashGroup, removeStashGroup } from '../utils/stashManager.js'
+import { stashFile, getStashMetadata, clearStash, exportStashAsZip, removeStashItem, createStashGroup, removeStashGroup, setStashCity, getStashCity } from '../utils/stashManager.js'
 import JSZip from 'jszip'
 
 const Wrapper = ({ children, title }) => (
@@ -15,19 +15,24 @@ const Wrapper = ({ children, title }) => (
 
 export default function TripFlow() {
   const { standards, rawStandards, config, addToast } = useApp()
-  const [step, _setStep] = useState(-1) // -1: Home, 0: Start, 1: Standards, 2: Active, 3: Checkout, 4: StashMode
+  const [step, _setStep] = useState(0) // 0: Start, 1: Standards, 2: Active, 3: Checkout, 4: StashMode
+  const [stashCityState, setStashCityState] = useState('')
   
   // Integrate with browser history for native back button support
   useEffect(() => {
+    getStashCity().then(c => {
+      if (c) setStashCityState(c)
+    })
+
     if (!window.history.state || window.history.state.step === undefined) {
-      window.history.replaceState({ step: -1 }, '')
+      window.history.replaceState({ step: 0 }, '')
     }
 
     const handlePopState = (e) => {
       if (e.state && e.state.step !== undefined) {
         _setStep(e.state.step)
       } else {
-        _setStep(-1)
+        _setStep(0)
       }
     }
     
@@ -92,8 +97,26 @@ export default function TripFlow() {
         }
       }
       setPendingFiles(folderGroups)
-      setStep(0)
-      addToast(`成功导入 ${totalFiles} 份文件，请输入出差目的地`, 'success')
+      
+      const nameParts = file.name.split('_')
+      const extractedCity = nameParts[0] || ''
+      
+      if (extractedCity && extractedCity !== '未知城市' && extractedCity !== '手机发票暂存包裹') {
+        setCity(extractedCity)
+        const matchedCity = rawStandards.find(l1 => l1.level1 === extractedCity.trim() || l1.level1.includes(extractedCity.trim()) || extractedCity.trim().includes(l1.level1))
+        let std = null
+        if (matchedCity) {
+          std = matchedCity.level2s.find(l => l.name === '全市' || l.name === '市辖区') || matchedCity.level2s[0]
+        } else {
+          std = standards[extractedCity.trim()] || { name: extractedCity, accommodation: 500 }
+        }
+        setTripStandards(std)
+        addToast(`已识别暂存地【${extractedCity}】，自动拉取标准并开始解析...`, 'success')
+        startTrip(folderGroups)
+      } else {
+        setStep(0)
+        addToast(`成功导入 ${totalFiles} 份文件，请输入出差目的地`, 'success')
+      }
     } catch (err) {
       addToast('解压失败: ' + err.message, 'error')
     }
@@ -131,9 +154,9 @@ export default function TripFlow() {
     setStep(1)
   }
 
-  const startTrip = async () => {
+  const startTrip = async (groupsToProcess = pendingFiles) => {
     setStep(2)
-    const folders = Object.keys(pendingFiles)
+    const folders = Object.keys(groupsToProcess)
     if (folders.length > 0) {
       setAnalyzing(true)
       setAnalyzeMsg('正在识别发票...')
@@ -141,7 +164,7 @@ export default function TripFlow() {
       
       let allResults = []
       for (const folder of folders) {
-        const files = pendingFiles[folder]
+        const files = groupsToProcess[folder]
         const groupType = folder.startsWith('专项组') ? 'group' : 'other'
         
         try {
@@ -285,7 +308,7 @@ export default function TripFlow() {
 
   const handleExportStash = async () => {
     try {
-      await exportStashAsZip()
+      await exportStashAsZip(stashCityState || city)
       addToast('打包导出成功！', 'success')
     } catch (e) {
       addToast(e.message, 'error')
@@ -295,6 +318,7 @@ export default function TripFlow() {
   const handleClearStash = async () => {
     if (confirm('确定要清空所有暂存文件吗？')) {
       await clearStash()
+      setStashCityState('')
       loadStash()
       addToast('已清空暂存区', 'info')
     }
@@ -302,37 +326,21 @@ export default function TripFlow() {
 
   return (
     <div className="w-full">
-      {step === -1 && (
-        <Wrapper title="欢迎使用报销助手">
-          <div className="flex flex-col gap-4">
-            <div className="card text-center" onClick={() => setStep(0)} style={{cursor: 'pointer'}}>
-              <div className="text-3xl mb-2">💻</div>
-              <h3 className="text-lg font-bold">开始报销整理</h3>
-              <p className="text-sm text-muted">包含完整识别与测算，建议在电脑端使用</p>
-            </div>
-            
-            <div className="card text-center" onClick={() => setStep(4)} style={{cursor: 'pointer', borderColor: 'var(--accent)'}}>
-              <div className="text-3xl mb-2">📱</div>
-              <h3 className="text-lg font-bold text-accent">随手拍暂存</h3>
-              <p className="text-sm text-muted">出差途中专用。仅拍照存入本地，无耗时识别</p>
-            </div>
-
-            <div className="card flex items-center gap-3" onClick={() => document.getElementById('import-zip').click()} style={{cursor: 'pointer'}}>
-              <div className="text-2xl">📥</div>
-              <div className="flex flex-col text-left">
-                <span className="font-bold">导入手机暂存包</span>
-                <span className="text-xs text-muted">导入并一键解析手机生成的 ZIP</span>
-              </div>
-              <input type="file" id="import-zip" accept=".zip" style={{display: 'none'}} onChange={handleImportZip} />
-            </div>
-          </div>
-        </Wrapper>
-      )}
-
       {step === 0 && (
-        <Wrapper title="你要去哪里出差？">
+        <Wrapper title="欢迎使用报销助手">
+          {stashCityState && (
+            <div className="card mb-4 flex justify-between items-center bg-accent text-white" style={{ cursor: 'pointer' }} onClick={() => setStep(4)}>
+              <div className="flex flex-col text-left">
+                <span className="font-bold">📱 进行中的手机暂存</span>
+                <span className="text-sm opacity-90">继续处理 {stashCityState} 的出差发票</span>
+              </div>
+              <span className="font-bold">&gt;</span>
+            </div>
+          )}
+
           <div className="card flex flex-col gap-4">
-            <p className="text-muted">请输入目的地城市，我们将自动匹配差旅标准。</p>
+            <h3 className="text-lg font-bold text-accent">你要去哪里出差？</h3>
+            <p className="text-sm text-muted">输入目的地城市，自动拉取差旅标准后，可选择【手机随手拍暂存】或【电脑端全量解析】。</p>
             <div className="input-group">
               <input 
                 type="text" 
@@ -349,20 +357,29 @@ export default function TripFlow() {
             
             {districtOptions.length > 0 ? (
               <div className="flex flex-col gap-3 mt-4">
-                <p className="text-sm text-accent">请选择具体区县：</p>
+                <p className="text-sm font-bold">请选择具体区县标准：</p>
                 <div className="grid-2">
                   {districtOptions.map(l2 => (
-                    <button key={l2.name} className="btn btn-secondary" onClick={() => selectDistrict(l2)}>
+                    <button key={l2.name} className="btn btn-secondary w-full" onClick={() => selectDistrict(l2)}>
                       {l2.name}
                     </button>
                   ))}
                 </div>
               </div>
             ) : (
-              <button className="btn btn-primary mt-4" onClick={handleNextToStandards}>
-                下一步
+              <button className="btn btn-primary w-full" onClick={handleNextToStandards}>
+                查询出差标准
               </button>
             )}
+          </div>
+
+          <div className="card flex items-center gap-3 mt-4" onClick={() => document.getElementById('import-zip').click()} style={{cursor: 'pointer'}}>
+            <div className="text-3xl">📥</div>
+            <div className="flex flex-col text-left">
+              <span className="font-bold text-lg">电脑端一键导入解析</span>
+              <span className="text-sm text-muted">导入手机导出的暂存包，全自动识别测算</span>
+            </div>
+            <input type="file" id="import-zip" accept=".zip" style={{display: 'none'}} onChange={handleImportZip} />
           </div>
         </Wrapper>
       )}
@@ -385,9 +402,20 @@ export default function TripFlow() {
               </div>
             </div>
             <p className="text-sm text-muted mt-4">标准已就绪，你可以随时在旅途中拍照记账了。</p>
-            <div className="flex gap-3 mt-4">
-              <button className="btn btn-secondary flex-1" onClick={() => setStep(-1)}>返回首页</button>
-              <button className="btn btn-primary flex-1" onClick={startTrip}>开始出差</button>
+            <div className="flex flex-col gap-3 mt-4">
+              <button className="btn btn-primary w-full flex items-center justify-center gap-2" onClick={async () => {
+                await setStashCity(city)
+                setStashCityState(city)
+                setStep(4)
+              }}>
+                📱 开启随手拍暂存 <span className="text-xs opacity-80">(手机操作推荐)</span>
+              </button>
+              <button className="btn btn-secondary w-full" onClick={() => startTrip()}>
+                💻 开始电脑端全量解析
+              </button>
+              <button className="btn btn-secondary w-full" style={{background: 'transparent', border: 'none', textDecoration: 'underline'}} onClick={() => setStep(0)}>
+                返回修改目的地
+              </button>
             </div>
           </div>
         </Wrapper>
@@ -627,7 +655,7 @@ export default function TripFlow() {
               )}
             </div>
             
-            <button className="btn btn-secondary w-full mt-4" onClick={() => setStep(-1)}>返回首页</button>
+            <button className="btn btn-secondary w-full mt-4" onClick={() => setStep(0)}>返回首页</button>
           </Wrapper>
         )
       })()}

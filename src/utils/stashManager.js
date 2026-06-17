@@ -60,6 +60,7 @@ export async function createStashGroup(groupName) {
 export async function getStashMetadata() {
   const metadataList = [];
   await localforage.iterate((value, key) => {
+    if (key === 'trip_city') return;
     metadataList.push({
       id: key,
       name: value.name,
@@ -97,7 +98,18 @@ export async function removeStashGroup(groupId) {
 }
 
 /**
- * Clear the entire stash.
+ * Save the current trip's city for continuity.
+ */
+export async function setStashCity(city) {
+  await localforage.setItem('trip_city', city);
+}
+
+export async function getStashCity() {
+  return await localforage.getItem('trip_city');
+}
+
+/**
+ * Clear the entire stash including the saved city.
  */
 export async function clearStash() {
   await localforage.clear();
@@ -106,7 +118,7 @@ export async function clearStash() {
 /**
  * Pack all stashed files into a ZIP and trigger download.
  */
-export async function exportStashAsZip() {
+export async function exportStashAsZip(city = '未知城市') {
   const zip = new JSZip();
   let count = 0;
   
@@ -118,7 +130,8 @@ export async function exportStashAsZip() {
     }
   });
   
-  await localforage.iterate((value) => {
+  await localforage.iterate((value, key) => {
+    if (key === 'trip_city') return; // Skip city metadata
     if (value.type === 'group_definition') return; // Skip the metadata entries
     if (!value.data) return; // Paranoia check
     
@@ -141,6 +154,6 @@ export async function exportStashAsZip() {
   }
   
   const blob = await zip.generateAsync({ type: 'blob' });
-  saveAs(blob, `手机发票暂存包裹_${new Date().getTime()}.zip`);
+  saveAs(blob, `${city}_手机发票暂存包裹_${new Date().getTime()}.zip`);
   return count;
 }
