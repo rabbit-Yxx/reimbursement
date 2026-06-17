@@ -4,10 +4,11 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-// Ensure Tesseract uses local tessdata — use import.meta.url for correct base path
-const basePath = import.meta.url ? new URL('.', import.meta.url).href : '';
+// Ensure Tesseract uses local tessdata with correct base URL for GitHub Pages
 const TESS_OPTIONS = {
-  langPath: './tessdata',
+  workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
+  corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5',
+  langPath: import.meta.env.BASE_URL + 'tessdata',
   gzip: false
 };
 
@@ -249,21 +250,66 @@ async function extractImageText(fileOrBlob) {
   }
 }
 
+// ==========================================
+// Filename-based smart extraction (primary method)
+// ==========================================
+
+function extractInfoFromFilename(filename) {
+  if (!filename) return {}
+  const info = {}
+  
+  // Detect type from filename
+  if (/dzfp|电子发票|增值税/.test(filename)) info.role = 'invoice'
+  if (/行程|itinerary/i.test(filename)) info.role = 'itinerary'
+  if (/水单|receipt/i.test(filename)) info.role = 'receipt'
+  
+  // Extract date from filename patterns like _20260614_ or _2026-06-14_
+  const dateMatch = filename.match(/(20\d{2})(\d{2})(\d{2})/) || 
+                    filename.match(/(20\d{2})-(\d{2})-(\d{2})/) ||
+                    filename.match(/(20\d{2})年(\d{1,2})月(\d{1,2})/)
+  if (dateMatch) {
+    const y = parseInt(dateMatch[1]), m = parseInt(dateMatch[2]), d = parseInt(dateMatch[3])
+    if (y >= 2020 && y <= 2030 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      info.date = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    }
+  }
+  
+  // Detect expense type from company name in filename
+  if (/餐饮|餐费|饭店|餐厅|食品|快餐|美团|饿了么|炸鸡|烧烤|面馆|小吃|火锅|奶茶|咖啡/.test(filename)) info.expenseType = 'meal'
+  if (/酒店|宾馆|旅馆|住宿|如家|汉庭|锦江|亚朵|全季/.test(filename)) info.expenseType = 'accommodation'
+  if (/滴滴|出租|打车|DIDI|交通/i.test(filename)) info.expenseType = 'taxi-didi'
+  if (/铁路|高铁|动车|12306/.test(filename)) info.expenseType = 'train'
+  if (/航空|机票|飞机/.test(filename)) info.expenseType = 'flight'
+  
+  return info
+}
+
 async function analyzeSingleFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   let text = '';
 
+  // First: extract from filename (fast, reliable)
+  const filenameInfo = extractInfoFromFilename(file.name)
+
+  // Second: try PDF text extraction (relatively fast, no model download)
   if (ext === 'pdf') {
     text = await extractPdfText(file);
   } else if (['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'webp'].includes(ext)) {
     text = await extractImageText(file);
   }
 
-  const expenseType = detectExpenseType(text);
-  let date = extractDate(text);
+  // Parse text content if we got any
+  const textExpenseType = detectExpenseType(text);
+  let textDate = extractDate(text);
   let endDate = null;
-  const amount = extractAmount(text);
-  const role = detectRole(text, expenseType);
+  const textAmount = extractAmount(text);
+  const textRole = detectRole(text, textExpenseType || filenameInfo.expenseType);
+
+  // Merge: text results take priority, filename fills gaps
+  const expenseType = textExpenseType || filenameInfo.expenseType || null;
+  let date = textDate || filenameInfo.date || null;
+  const amount = textAmount || null;
+  const role = textRole || filenameInfo.role || null;
 
   if (expenseType === 'accommodation') {
     const dates = extractAccommodationDates(text);
@@ -295,8 +341,21 @@ async function analyzeSingleFile(file) {
 export async function analyzeFiles(filesArray, groupType) {
   const results = [];
   for (const file of filesArray) {
-    const result = await analyzeSingleFile(file);
-    results.push(result);
+    try {
+      const result = await analyzeSingleFile(file);
+      results.push(result);
+    } catch (e) {
+      console.error('Error analyzing file:', file.name, e);
+      results.push({
+        file,
+        originalName: file.name,
+        text: '',
+        ...extractInfoFromFilename(file.name),
+        amount: null,
+        status: 'incomplete',
+        groupId: null,
+      });
+    }
   }
 
   if (groupType === 'meal') {
@@ -318,3 +377,4 @@ export async function analyzeFiles(filesArray, groupType) {
 
   return results;
 }
+
