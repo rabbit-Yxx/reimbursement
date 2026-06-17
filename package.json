@@ -7,6 +7,8 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev:renderer": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
     "build:electron": "node build-electron.mjs",
     "dev": "concurrently -k -n \"Vite,Electron\" -c \"cyan,yellow\" \"npm run dev:renderer\" \"npm run build:electron && wait-on tcp:5173 && electron .\"",
     "electron:build": "vite build && node build-electron.mjs && electron-builder --win"

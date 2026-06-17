@@ -55,6 +55,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       config, saveConfig,
       standards,
+      rawStandards: defaultStandards,
       organizeItems, setOrganizeItems,
       toasts, addToast, removeToast,
     }}>
