@@ -15,7 +15,32 @@ const Wrapper = ({ children, title }) => (
 
 export default function TripFlow() {
   const { standards, rawStandards, config, addToast } = useApp()
-  const [step, setStep] = useState(-1) // -1: Home, 0: Start, 1: Standards, 2: Active, 3: Checkout, 4: StashMode
+  const [step, _setStep] = useState(-1) // -1: Home, 0: Start, 1: Standards, 2: Active, 3: Checkout, 4: StashMode
+  
+  // Integrate with browser history for native back button support
+  useEffect(() => {
+    if (!window.history.state || window.history.state.step === undefined) {
+      window.history.replaceState({ step: -1 }, '')
+    }
+
+    const handlePopState = (e) => {
+      if (e.state && e.state.step !== undefined) {
+        _setStep(e.state.step)
+      } else {
+        _setStep(-1)
+      }
+    }
+    
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  const setStep = (newStep) => {
+    if (newStep !== step) {
+      window.history.pushState({ step: newStep }, '')
+      _setStep(newStep)
+    }
+  }
   
   // Trip Config
   const [city, setCity] = useState('')
