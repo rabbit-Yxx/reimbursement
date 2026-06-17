@@ -103,16 +103,15 @@ export default function TripFlow() {
       
       if (extractedCity && extractedCity !== '未知城市' && extractedCity !== '手机发票暂存包裹') {
         setCity(extractedCity)
-        const matchedCity = rawStandards.find(l1 => l1.level1 === extractedCity.trim() || l1.level1.includes(extractedCity.trim()) || extractedCity.trim().includes(l1.level1))
-        let std = null
-        if (matchedCity) {
-          std = matchedCity.level2s.find(l => l.name === '全市' || l.name === '市辖区') || matchedCity.level2s[0]
+        const resolution = resolveCityStandards(extractedCity)
+        if (resolution && resolution.type === 'single') {
+          setTripStandards(resolution.standard)
+          addToast(`已识别暂存地【${extractedCity}】，自动拉取标准并开始解析...`, 'success')
+          startTrip(folderGroups)
         } else {
-          std = standards[extractedCity.trim()] || { name: extractedCity, accommodation: 500 }
+          setStep(0)
+          addToast(`成功导入 ${totalFiles} 份文件，请确认出差具体区县`, 'success')
         }
-        setTripStandards(std)
-        addToast(`已识别暂存地【${extractedCity}】，自动拉取标准并开始解析...`, 'success')
-        startTrip(folderGroups)
       } else {
         setStep(0)
         addToast(`成功导入 ${totalFiles} 份文件，请输入出差目的地`, 'success')
@@ -123,6 +122,53 @@ export default function TripFlow() {
     e.target.value = ''
   }
 
+  const resolveCityStandards = (cityString) => {
+    const cities = cityString.split(/[,，、\s]+/).map(c => c.trim()).filter(Boolean)
+    if (cities.length === 0) return null
+
+    if (cities.length === 1) {
+      const c = cities[0]
+      const matchedCity = rawStandards.find(l1 => l1.level1 === c || l1.level1.includes(c) || c.includes(l1.level1))
+      if (matchedCity) {
+        if (matchedCity.level2s.length > 1 && !matchedCity.level2s.every(l => l.name === '全市' || l.name === '市辖区' || l.name === '其他')) {
+          return { type: 'options', options: matchedCity.level2s }
+        } else {
+          return { type: 'single', standard: matchedCity.level2s.find(l => l.name === '全市' || l.name === '市辖区') || matchedCity.level2s[0] }
+        }
+      } else {
+        const found = standards[c]
+        if (found) return { type: 'single', standard: found }
+        return { type: 'single', standard: { name: c, accommodation: 500 } }
+      }
+    }
+
+    let maxAcc = 0
+    let maxTaxi = 0
+    
+    for (const c of cities) {
+      let std = null
+      const matchedCity = rawStandards.find(l1 => l1.level1 === c || l1.level1.includes(c) || c.includes(l1.level1))
+      if (matchedCity) {
+        std = matchedCity.level2s.find(l => l.name === '全市' || l.name === '市辖区') || matchedCity.level2s[0]
+      } else {
+        std = standards[c] || { accommodation: 500 }
+      }
+      
+      if (std.accommodation > maxAcc) maxAcc = std.accommodation
+      if (std.taxi && std.taxi > maxTaxi) maxTaxi = std.taxi
+    }
+
+    return { 
+      type: 'single', 
+      standard: { 
+        name: cities.join('、'), 
+        accommodation: maxAcc, 
+        taxi: maxTaxi || config.taxiLimit, 
+        isMultiCity: true
+      } 
+    }
+  }
+
   // Step 0: Find standards for city
   const handleNextToStandards = () => {
     if (!city.trim()) {
@@ -130,26 +176,17 @@ export default function TripFlow() {
       return
     }
     
-    // Check if the input matches a level1 city in rawStandards
-    const matchedCity = rawStandards.find(l1 => l1.level1 === city.trim() || l1.level1.includes(city.trim()) || city.trim().includes(l1.level1))
+    const resolution = resolveCityStandards(city.trim())
+    if (!resolution) return
     
-    if (matchedCity) {
-      if (matchedCity.level2s.length > 1 && !matchedCity.level2s.every(l => l.name === '全市' || l.name === '市辖区' || l.name === '其他')) {
-        // Has multiple districts, let user choose
-        setDistrictOptions(matchedCity.level2s)
-        return
-      } else {
-        // Only one main standard
-        setTripStandards(matchedCity.level2s.find(l => l.name === '全市' || l.name === '市辖区') || matchedCity.level2s[0])
-      }
-    } else {
-      let found = standards[city.trim()]
-      if (found) {
-        setTripStandards(found)
-      } else {
-        setTripStandards({ name: city, accommodation: 500 }) // fallback
-        addToast('未找到该城市的特定标准，使用默认标准', 'info')
-      }
+    if (resolution.type === 'options') {
+      setDistrictOptions(resolution.options)
+      return
+    }
+    
+    setTripStandards(resolution.standard)
+    if (resolution.standard.isMultiCity) {
+      addToast('检测到多城市连飞，已自动采用最高标准作为参考线', 'info')
     }
     setStep(1)
   }
@@ -401,7 +438,13 @@ export default function TripFlow() {
                 <span className="text-lg font-bold text-accent">¥ {tripStandards?.taxi || config.taxiLimit}/天</span>
               </div>
             </div>
-            <p className="text-sm text-muted mt-4">标准已就绪，你可以随时在旅途中拍照记账了。</p>
+            {tripStandards?.isMultiCity ? (
+              <p className="text-sm text-accent mt-4">
+                ⚠️ 检测到多城市连飞，系统已自动选取其中最高标准作为参考上限。如有严格要求，请在最终报销时微调。
+              </p>
+            ) : (
+              <p className="text-sm text-muted mt-4">标准已就绪，你可以随时在旅途中拍照记账了。</p>
+            )}
             <div className="flex flex-col gap-3 mt-4">
               <button className="btn btn-primary w-full flex items-center justify-center gap-2" onClick={async () => {
                 await setStashCity(city)
