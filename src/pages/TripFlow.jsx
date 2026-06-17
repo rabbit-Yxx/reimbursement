@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext.jsx'
 import { analyzeFiles, setAnalyzerProgressCallback } from '../utils/analyzer.js'
 import { packageFiles } from '../utils/packager.js'
 import { optimizeInvoices } from '../utils/optimizer.js'
+import { stashFile, getStashMetadata, clearStash, exportStashAsZip, removeStashItem } from '../utils/stashManager.js'
+import JSZip from 'jszip'
 
 const Wrapper = ({ children, title }) => (
   <div className="flex flex-col gap-4">
@@ -13,12 +15,13 @@ const Wrapper = ({ children, title }) => (
 
 export default function TripFlow() {
   const { standards, rawStandards, config, addToast } = useApp()
-  const [step, setStep] = useState(0) // 0: Start, 1: Standards, 2: Active, 3: Checkout
+  const [step, setStep] = useState(-1) // -1: Home, 0: Start, 1: Standards, 2: Active, 3: Checkout, 4: StashMode
   
   // Trip Config
   const [city, setCity] = useState('')
   const [districtOptions, setDistrictOptions] = useState([])
   const [tripStandards, setTripStandards] = useState(null)
+  const [pendingFiles, setPendingFiles] = useState([]) // Files imported from zip
   
   // Trip Data
   const [items, setItems] = useState([])
@@ -26,6 +29,44 @@ export default function TripFlow() {
   const [analyzeMsg, setAnalyzeMsg] = useState('正在识别发票...')
   const [optimizations, setOptimizations] = useState(null)
   const [packaging, setPackaging] = useState(false)
+  
+  // Stash Data
+  const [stashedItems, setStashedItems] = useState([])
+
+  // Load stash on mount if going to stash mode
+  useEffect(() => {
+    if (step === 4) {
+      loadStash()
+    }
+  }, [step])
+
+  const loadStash = async () => {
+    const meta = await getStashMetadata()
+    setStashedItems(meta)
+  }
+
+  // Handle ZIP Import
+  const handleImportZip = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const zip = new JSZip()
+    try {
+      const contents = await zip.loadAsync(file)
+      const extractedFiles = []
+      for (const [filename, zipEntry] of Object.entries(contents.files)) {
+        if (!zipEntry.dir) {
+          const blob = await zipEntry.async('blob')
+          extractedFiles.push(new File([blob], filename, { type: blob.type }))
+        }
+      }
+      setPendingFiles(extractedFiles)
+      setStep(0)
+      addToast(`成功导入 ${extractedFiles.length} 份文件，请输入出差目的地`, 'success')
+    } catch (err) {
+      addToast('解压失败: ' + err.message, 'error')
+    }
+    e.target.value = ''
+  }
 
   // Step 0: Find standards for city
   const handleNextToStandards = () => {
@@ -56,6 +97,14 @@ export default function TripFlow() {
       }
     }
     setStep(1)
+  }
+
+  const startTrip = () => {
+    setStep(2)
+    if (pendingFiles.length > 0) {
+      handleFiles(pendingFiles)
+      setPendingFiles([])
+    }
   }
 
   const selectDistrict = (l2) => {
@@ -140,9 +189,64 @@ export default function TripFlow() {
     setPackaging(false)
   }
 
+  // Stash Mode Handlers
+  const handleStashFiles = async (files) => {
+    if (!files || files.length === 0) return
+    let count = 0
+    for (let i = 0; i < files.length; i++) {
+      await stashFile(files[i])
+      count++
+    }
+    addToast(`成功暂存 ${count} 份文件`, 'success')
+    loadStash()
+  }
+
+  const handleExportStash = async () => {
+    try {
+      await exportStashAsZip()
+      addToast('打包导出成功！', 'success')
+    } catch (e) {
+      addToast(e.message, 'error')
+    }
+  }
+
+  const handleClearStash = async () => {
+    if (confirm('确定要清空所有暂存文件吗？')) {
+      await clearStash()
+      loadStash()
+      addToast('已清空暂存区', 'info')
+    }
+  }
 
   return (
     <div className="w-full">
+      {step === -1 && (
+        <Wrapper title="欢迎使用报销助手">
+          <div className="flex flex-col gap-4">
+            <div className="card text-center" onClick={() => setStep(0)} style={{cursor: 'pointer'}}>
+              <div className="text-3xl mb-2">💻</div>
+              <h3 className="text-lg font-bold">开始报销整理</h3>
+              <p className="text-sm text-muted">包含完整识别与测算，建议在电脑端使用</p>
+            </div>
+            
+            <div className="card text-center" onClick={() => setStep(4)} style={{cursor: 'pointer', borderColor: 'var(--accent)'}}>
+              <div className="text-3xl mb-2">📱</div>
+              <h3 className="text-lg font-bold text-accent">随手拍暂存</h3>
+              <p className="text-sm text-muted">出差途中专用。仅拍照存入本地，无耗时识别</p>
+            </div>
+
+            <div className="card flex items-center gap-3" onClick={() => document.getElementById('import-zip').click()} style={{cursor: 'pointer'}}>
+              <div className="text-2xl">📥</div>
+              <div className="flex flex-col text-left">
+                <span className="font-bold">导入手机暂存包</span>
+                <span className="text-xs text-muted">导入并一键解析手机生成的 ZIP</span>
+              </div>
+              <input type="file" id="import-zip" accept=".zip" style={{display: 'none'}} onChange={handleImportZip} />
+            </div>
+          </div>
+        </Wrapper>
+      )}
+
       {step === 0 && (
         <Wrapper title="你要去哪里出差？">
           <div className="card flex flex-col gap-4">
@@ -200,8 +304,8 @@ export default function TripFlow() {
             </div>
             <p className="text-sm text-muted mt-4">标准已就绪，你可以随时在旅途中拍照记账了。</p>
             <div className="flex gap-3 mt-4">
-              <button className="btn btn-secondary flex-1" onClick={() => setStep(0)}>返回修改</button>
-              <button className="btn btn-primary flex-1" onClick={() => setStep(2)}>开始出差</button>
+              <button className="btn btn-secondary flex-1" onClick={() => setStep(-1)}>返回首页</button>
+              <button className="btn btn-primary flex-1" onClick={startTrip}>开始出差</button>
             </div>
           </div>
         </Wrapper>
@@ -334,6 +438,85 @@ export default function TripFlow() {
             </button>
           </div>
           
+        </Wrapper>
+      )}
+
+      {step === 4 && (
+        <Wrapper title="随手拍暂存">
+          {stashedItems.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              <h3 className="text-lg">已暂存 ({stashedItems.length})</h3>
+              {stashedItems.map((item) => (
+                <div key={item.id} className="card flex justify-between items-center" style={{ padding: '12px 16px' }}>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-sm text-ellipsis overflow-hidden whitespace-nowrap" style={{ maxWidth: '200px' }}>{item.name}</span>
+                    <span className="text-xs text-muted">{new Date(item.timestamp).toLocaleString()}</span>
+                  </div>
+                  <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={async () => {
+                    await removeStashItem(item.id)
+                    loadStash()
+                  }}>删除</button>
+                </div>
+              ))}
+              
+              <div className="flex gap-3 mt-4">
+                <button className="btn btn-secondary flex-1" onClick={handleClearStash}>
+                  清空
+                </button>
+                <button className="btn btn-primary flex-1" onClick={handleExportStash}>
+                  打包导出 ZIP
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="empty-state" style={{ padding: '40px 20px' }}>
+              <div className="empty-state-icon">📱</div>
+              <h3>暂存区为空</h3>
+              <p>在下方粘贴截图或拍照，发票将保存在手机本地</p>
+            </div>
+          )}
+
+          <div className="chat-input-bar">
+            <label className="chat-action-btn">
+              <input type="file" accept="image/*" capture="environment" onChange={e => { handleStashFiles(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+              📷
+            </label>
+            <label className="chat-action-btn">
+              <input type="file" multiple accept="image/*,.pdf" onChange={e => { handleStashFiles(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+              📁
+            </label>
+            <div
+              className="chat-paste-area"
+              contentEditable
+              onPaste={(e) => {
+                e.preventDefault()
+                const clipboardItems = e.clipboardData.items
+                const files = []
+                for (let i = 0; i < clipboardItems.length; i++) {
+                  const item = clipboardItems[i]
+                  if (item.type.startsWith('image/')) {
+                    const blob = item.getAsFile()
+                    if (blob) {
+                      const file = new File([blob], `暂存截图_${Date.now()}_${i}.png`, { type: blob.type })
+                      files.push(file)
+                    }
+                  }
+                }
+                if (files.length > 0) {
+                  handleStashFiles(files)
+                  e.target.textContent = ''
+                } else {
+                  addToast('剪贴板里没有图片哦', 'warning')
+                }
+                e.target.textContent = ''
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.preventDefault()
+              }}
+              data-placeholder="在此粘贴截图直接暂存..."
+            />
+          </div>
+          <button className="btn btn-secondary w-full mt-4" onClick={() => setStep(-1)}>返回首页</button>
         </Wrapper>
       )}
     </div>
